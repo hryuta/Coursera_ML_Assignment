@@ -1,0 +1,99 @@
+---
+title: "Coursera Machine Learning Class Assignment"
+author: "Ryuta Hosaka"
+date: "May 7, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The goal of this assignment
+
+In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participant, and is to predict the manner in which they did the exercise.  There are set of training and test data to build the model. In the dataset, there is "classe" variable which would be predicted with any of the other variable. 
+
+## preparation 
+
+Read test and training data from the site and insert to data sets in R. 
+
+```{r, echo=TRUE}
+
+library(caret)
+library(e1071)
+library(rattle)
+library(rpart.plot)
+setwd("C:/Users/hryut/OneDrive/Documents/R Projects/Coursera-DS-8-WK4")
+tr <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+tst <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training <- read.csv(url(tr), na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url(tst), na.strings=c("NA","#DIV/0!",""))
+## summary(training)
+
+```
+
+## Exploring data
+
+The goal here is to determine which attributes could be used for building the model. Looking at the training data set, there are many attributes comes with N/A values which might not be useful for building the model. To decide which attributes would be used for 
+
+```{r, echo=TRUE}
+
+nzvTraining <- nearZeroVar(training, saveMetrics=TRUE)
+trainingSub <- training[,nzvTraining$nzv==FALSE]
+
+trainingSub <- trainingSub[,7:length(colnames(trainingSub))]
+nonnaCols <- as.vector(apply(trainingSub, 2, function(trainingSub) length(which(!is.na(trainingSub)))))
+dropNAs <- c()
+for (i in 1:length(nonnaCols)) {
+    if (nonnaCols[i] > nrow(trainingSub)*.50) {
+        dropNAs <- c(dropNAs, colnames(trainingSub)[i])
+    }
+}
+
+trainingSub <- trainingSub[,(names(trainingSub) %in% dropNAs)]
+
+keepCols <- colnames(trainingSub[, -53]) 
+testingSub <- testing[keepCols]
+dim(trainingSub); dim(testingSub)
+
+set.seed(2)
+idx1 <- createDataPartition(trainingSub$classe, p=1/3, list=FALSE)
+trainingSub1 <- trainingSub[idx1,]
+df <- trainingSub[-idx1,]
+set.seed(3)
+idx2 <- createDataPartition(y=df$classe, p=0.5, list=FALSE)
+trainingSub2 <- df[idx2,]
+trainingSub3 <- df[-idx2,]
+dim(trainingSub1); dim(trainingSub2); dim(trainingSub3)
+
+```
+
+## Building the model
+In this experiment decision tree and random forest are used to build models. 
+
+```{r, echo=TRUE}
+## decision tree
+set.seed(5)
+modFit1 <- train(classe ~ .,method="rpart",data=trainingSub1)
+fancyRpartPlot(modFit1$finalModel)
+predictions1 <- predict(modFit1, newdata=trainingSub1)
+confusionMatrix(predictions1, trainingSub1$classe)
+
+## random forest
+set.seed(7)
+modFit2 <- train(classe ~ ., method="rf", preProcess=c("center", "scale"), trControl=trainControl(method = "cv", number = 4), data=trainingSub1)
+predictions2 <- predict(modFit2,trainingSub2)
+confusionMatrix(predictions2, trainingSub2$classe)
+print(modFit2, digits=3)
+
+```
+
+## Prediction
+With the results of two models, random forest is used for the prediction. 
+
+```{r, echo=TRUE}
+predictionTesting <- predict(modFit2, newdata=testing)
+predictionTesting
+```
+
+
